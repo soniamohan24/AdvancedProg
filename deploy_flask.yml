@@ -1,0 +1,55 @@
+---
+- name: Deploy Flask App on EC2
+  hosts: flask_server
+  become: true
+  vars:
+    repo_url: "https://github.com/soniamohan24/AdvancedProg.git"
+    app_name: "AdvancedProg"
+    docker_image: "advancedprog_image"
+    container_name: "advancedprog_container"
+    app_port: 5000
+
+  tasks:
+    - name: Ensure Docker is installed
+      apt:
+        name: docker.io
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure Docker is running
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Clone the Flask app from GitHub
+      git:
+        repo: "{{ repo_url }}"
+        dest: "/opt/{{ app_name }}"
+        version: "main"  # Replace 'main' if your branch is named differently
+
+    - name: Build the Docker image
+      community.docker.docker_image:
+        path: "/opt/{{ app_name }}"
+        name: "{{ docker_image }}"
+        tag: "latest"
+
+    - name: Stop and remove existing container if it exists
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Run the Flask app in a Docker container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ docker_image }}:latest"
+        state: started
+        ports:
+          - "{{ app_port }}:5000"
+        restart_policy: always
+
+    - name: Ensure the Flask app is accessible
+      uri:
+        url: "http://localhost:{{ app_port }}"
+        return_content: yes
